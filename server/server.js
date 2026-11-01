@@ -4,6 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const connectDB = require('./config/db');
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 
@@ -11,7 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Test API
+// Routes
 app.get('/', (req, res) => {
     res.json({
         success: true,
@@ -19,9 +20,11 @@ app.get('/', (req, res) => {
     });
 });
 
+app.use('/api/auth', authRoutes);
+
+// Start server
 const PORT = process.env.PORT || 5000;
 
-// Connect database and start server
 const startServer = async () => {
     await connectDB();
 

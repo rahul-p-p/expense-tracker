@@ -30,6 +30,8 @@ import {
 import API from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
+import Sidebar from '../components/Sidebar';
+
 const formatCurrency = (amount) =>
     new Intl.NumberFormat('en-IN', {
         style: 'currency',
@@ -91,7 +93,8 @@ function Dashboard() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-100">
+        <div className="min-h-screen bg-gray-100 md:pl-64">
+            <Sidebar />
 
             {/* Header */}
             <header className="bg-white shadow-sm px-6 py-4 flex justify-between items-center">
@@ -113,13 +116,13 @@ function Dashboard() {
                         <RefreshCw size={20} />
                     </button>
 
-                    <button
+                    {/* <button
                         onClick={logout}
                         className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600"
                     >
                         <LogOut size={18} />
                         Logout
-                    </button>
+                    </button> */}
                 </div>
             </header>
 

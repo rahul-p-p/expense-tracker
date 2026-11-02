@@ -52,6 +52,66 @@ const createTransaction = async (req, res) => {
 };
 
 // GET ALL TRANSACTIONS
+// const getTransactions = async (req, res) => {
+//     try {
+//         const {
+//             type,
+//             category,
+//             search,
+//             sort = 'newest',
+//             page = 1,
+//             limit = 10
+//         } = req.query;
+
+//         const pageNumber = Math.max(1, Number(page) || 1);
+//         const pageSize = Math.min(100, Math.max(1, Number(limit) || 10));
+
+//         const filter = {
+//             user: req.user.id
+//         };
+
+//         if (type && ['income', 'expense'].includes(type)) {
+//             filter.type = type;
+//         }
+
+//         if (category) {
+//             filter.category = category;
+//         }
+
+//         if (search) {
+//             filter.title = {
+//                 $regex: search,
+//                 $options: 'i'
+//             };
+//         }
+
+//         const sortOption = sort === 'oldest'
+//             ? { date: 1 }
+//             : { date: -1 };
+
+//         const total = await Transaction.countDocuments(filter);
+
+//         const transactions = await Transaction.find(filter)
+//             .sort(sortOption)
+//             .skip((pageNumber - 1) * pageSize)
+//             .limit(pageSize);
+
+//         res.status(200).json({
+//             success: true,
+//             total,
+//             page: pageNumber,
+//             pages: Math.ceil(total / pageSize),
+//             transactions
+//         });
+
+//     } catch (error) {
+//         res.status(500).json({
+//             success: false,
+//             message: 'Failed to fetch transactions'
+//         });
+//     }
+// };
+// GET ALL TRANSACTIONS WITH PAGINATION
 const getTransactions = async (req, res) => {
     try {
         const {
@@ -63,8 +123,8 @@ const getTransactions = async (req, res) => {
             limit = 10
         } = req.query;
 
-        const pageNumber = Math.max(1, Number(page) || 1);
-        const pageSize = Math.min(100, Math.max(1, Number(limit) || 10));
+        const pageNumber = Math.max(1, parseInt(page, 10) || 1);
+        const pageSize = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
 
         const filter = {
             user: req.user.id
@@ -78,33 +138,39 @@ const getTransactions = async (req, res) => {
             filter.category = category;
         }
 
-        if (search) {
+        if (search && search.trim()) {
             filter.title = {
-                $regex: search,
+                $regex: search.trim(),
                 $options: 'i'
             };
         }
 
         const sortOption = sort === 'oldest'
-            ? { date: 1 }
-            : { date: -1 };
+            ? { date: 1, createdAt: 1 }
+            : { date: -1, createdAt: -1 };
 
-        const total = await Transaction.countDocuments(filter);
-
-        const transactions = await Transaction.find(filter)
-            .sort(sortOption)
-            .skip((pageNumber - 1) * pageSize)
-            .limit(pageSize);
+        const [total, transactions] = await Promise.all([
+            Transaction.countDocuments(filter),
+            Transaction.find(filter)
+                .sort(sortOption)
+                .skip((pageNumber - 1) * pageSize)
+                .limit(pageSize)
+        ]);
 
         res.status(200).json({
             success: true,
             total,
             page: pageNumber,
+            limit: pageSize,
             pages: Math.ceil(total / pageSize),
+            hasNextPage: pageNumber * pageSize < total,
+            hasPreviousPage: pageNumber > 1,
             transactions
         });
 
     } catch (error) {
+        console.error('Get transactions error:', error);
+
         res.status(500).json({
             success: false,
             message: 'Failed to fetch transactions'

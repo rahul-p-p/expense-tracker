@@ -1,21 +1,9 @@
-// function Dashboard() {
-//     return (
-//         <div className="p-10">
-//             <h1 className="text-3xl font-bold">
-//                 Dashboard is working!
-//             </h1>
-//         </div>
-//     );
-// }
-
-// export default Dashboard;
 
 import { useEffect, useState } from 'react';
 import {
     Wallet,
     TrendingUp,
     TrendingDown,
-    LogOut,
     RefreshCw
 } from 'lucide-react';
 
@@ -24,25 +12,53 @@ import {
     Pie,
     Cell,
     Tooltip,
-    ResponsiveContainer
+    ResponsiveContainer,
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Legend,
+    LineChart,
+    Line
 } from 'recharts';
 
 import API from '../services/api';
-import { useAuth } from '../context/AuthContext';
-
 import Sidebar from '../components/Sidebar';
 
 const formatCurrency = (amount) =>
     new Intl.NumberFormat('en-IN', {
         style: 'currency',
         currency: 'INR',
-        maximumFractionDigits: 2
+        maximumFractionDigits: 0
     }).format(amount || 0);
 
-function Dashboard() {
-    const { logout } = useAuth();
+const COLORS = [
+    '#3B82F6',
+    '#10B981',
+    '#F59E0B',
+    '#8B5CF6',
+    '#EF4444',
+    '#06B6D4',
+    '#EC4899',
+    '#84CC16'
+];
 
+const getMonthKey = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+};
+
+const getMonthLabel = (date) =>
+    date.toLocaleDateString('en-IN', {
+        month: 'short',
+        year: '2-digit'
+    });
+
+function Dashboard() {
     const [data, setData] = useState(null);
+    const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -51,9 +67,21 @@ function Dashboard() {
             setLoading(true);
             setError('');
 
-            const response = await API.get('/dashboard');
+            const [dashboardResponse, transactionResponse] =
+                await Promise.all([
+                    API.get('/dashboard'),
+                    API.get('/transactions', {
+                        params: {
+                            page: 1,
+                            limit: 100
+                        }
+                    })
+                ]);
 
-            setData(response.data);
+            setData(dashboardResponse.data);
+            setTransactions(
+                transactionResponse.data.transactions || []
+            );
         } catch (err) {
             setError(
                 err.response?.data?.message ||
@@ -75,14 +103,70 @@ function Dashboard() {
     const categoryData = data?.categoryBreakdown || [];
     const recentTransactions = data?.recentTransactions || [];
 
-    const COLORS = [
-        '#3B82F6',
-        '#10B981',
-        '#F59E0B',
-        '#8B5CF6',
-        '#EF4444',
-        '#06B6D4'
-    ];
+    // LAST 6 MONTHS CHART DATA
+    const monthlyChartData = (() => {
+        const result = [];
+
+        for (let i = 5; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(1);
+            date.setMonth(date.getMonth() - i);
+
+            const key = getMonthKey(date);
+
+            const monthTransactions = transactions.filter(
+                (transaction) => {
+                    const transactionDate = new Date(transaction.date);
+                    return getMonthKey(transactionDate) === key;
+                }
+            );
+
+            const income = monthTransactions
+                .filter((item) => item.type === 'income')
+                .reduce((sum, item) => sum + Number(item.amount), 0);
+
+            const expense = monthTransactions
+                .filter((item) => item.type === 'expense')
+                .reduce((sum, item) => sum + Number(item.amount), 0);
+
+            result.push({
+                month: getMonthLabel(date),
+                income,
+                expense
+            });
+        }
+
+        return result;
+    })();
+
+    // CURRENT YEAR CHART DATA
+    const yearlyChartData = (() => {
+        const currentYear = new Date().getFullYear();
+
+        return Array.from({ length: 12 }, (_, index) => {
+            const date = new Date(currentYear, index, 1);
+            const key = getMonthKey(date);
+
+            const monthTransactions = transactions.filter(
+                (transaction) => {
+                    const transactionDate = new Date(transaction.date);
+                    return getMonthKey(transactionDate) === key;
+                }
+            );
+
+            return {
+                month: date.toLocaleDateString('en-IN', {
+                    month: 'short'
+                }),
+                income: monthTransactions
+                    .filter((item) => item.type === 'income')
+                    .reduce((sum, item) => sum + Number(item.amount), 0),
+                expense: monthTransactions
+                    .filter((item) => item.type === 'expense')
+                    .reduce((sum, item) => sum + Number(item.amount), 0)
+            };
+        });
+    })();
 
     if (loading) {
         return (
@@ -96,7 +180,6 @@ function Dashboard() {
         <div className="min-h-screen bg-gray-100 md:pl-64">
             <Sidebar />
 
-            {/* Header */}
             <header className="bg-white shadow-sm px-6 py-4 flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800">
@@ -107,23 +190,13 @@ function Dashboard() {
                     </p>
                 </div>
 
-                <div className="flex gap-3">
-                    <button
-                        onClick={fetchDashboard}
-                        className="p-2 rounded-lg border hover:bg-gray-100"
-                        title="Refresh"
-                    >
-                        <RefreshCw size={20} />
-                    </button>
-
-                    {/* <button
-                        onClick={logout}
-                        className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600"
-                    >
-                        <LogOut size={18} />
-                        Logout
-                    </button> */}
-                </div>
+                <button
+                    onClick={fetchDashboard}
+                    className="p-2 rounded-lg border hover:bg-gray-100"
+                    title="Refresh"
+                >
+                    <RefreshCw size={20} />
+                </button>
             </header>
 
             <main className="p-6 max-w-7xl mx-auto">
@@ -144,7 +217,7 @@ function Dashboard() {
                     </div>
                 )}
 
-                {/* Summary Cards */}
+                {/* SUMMARY CARDS */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
 
                     <div className="bg-white p-6 rounded-xl shadow-sm">
@@ -178,7 +251,7 @@ function Dashboard() {
                     </div>
                 </div>
 
-                {/* Monthly and Yearly Summary */}
+                {/* MONTHLY AND YEARLY SUMMARY */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
 
                     <div className="bg-white p-6 rounded-xl shadow-sm">
@@ -187,13 +260,15 @@ function Dashboard() {
                         </h3>
 
                         <p className="text-gray-500">
-                            Income: <span className="text-green-600 font-semibold">
+                            Income:{' '}
+                            <span className="text-green-600 font-semibold">
                                 {formatCurrency(monthly.income)}
                             </span>
                         </p>
 
                         <p className="text-gray-500 mt-2">
-                            Expenses: <span className="text-red-600 font-semibold">
+                            Expenses:{' '}
+                            <span className="text-red-600 font-semibold">
                                 {formatCurrency(monthly.expense)}
                             </span>
                         </p>
@@ -209,13 +284,15 @@ function Dashboard() {
                         </h3>
 
                         <p className="text-gray-500">
-                            Income: <span className="text-green-600 font-semibold">
+                            Income:{' '}
+                            <span className="text-green-600 font-semibold">
                                 {formatCurrency(yearly.income)}
                             </span>
                         </p>
 
                         <p className="text-gray-500 mt-2">
-                            Expenses: <span className="text-red-600 font-semibold">
+                            Expenses:{' '}
+                            <span className="text-red-600 font-semibold">
                                 {formatCurrency(yearly.expense)}
                             </span>
                         </p>
@@ -226,7 +303,101 @@ function Dashboard() {
                     </div>
                 </div>
 
-                {/* Category Chart and Recent Transactions */}
+                {/* MONTHLY INCOME VS EXPENSE */}
+                <div className="bg-white p-6 rounded-xl shadow-sm mt-6">
+                    <h3 className="font-semibold text-lg mb-1">
+                        Monthly Income vs Expenses
+                    </h3>
+
+                    <p className="text-sm text-gray-500 mb-5">
+                        Financial comparison for the last 6 months
+                    </p>
+
+                    <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={monthlyChartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="month" />
+                                <YAxis
+                                    tickFormatter={(value) =>
+                                        `₹${value >= 1000
+                                            ? `${value / 1000}k`
+                                            : value}`
+                                    }
+                                />
+                                <Tooltip
+                                    formatter={(value) =>
+                                        formatCurrency(value)
+                                    }
+                                />
+                                <Legend />
+                                <Bar
+                                    dataKey="income"
+                                    name="Income"
+                                    fill="#10B981"
+                                    radius={[5, 5, 0, 0]}
+                                />
+                                <Bar
+                                    dataKey="expense"
+                                    name="Expenses"
+                                    fill="#EF4444"
+                                    radius={[5, 5, 0, 0]}
+                                />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* YEARLY FINANCIAL TREND */}
+                <div className="bg-white p-6 rounded-xl shadow-sm mt-6">
+                    <h3 className="font-semibold text-lg mb-1">
+                        Yearly Financial Trend
+                    </h3>
+
+                    <p className="text-sm text-gray-500 mb-5">
+                        Income and expenses across the current year
+                    </p>
+
+                    <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={yearlyChartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="month" />
+                                <YAxis
+                                    tickFormatter={(value) =>
+                                        `₹${value >= 1000
+                                            ? `${value / 1000}k`
+                                            : value}`
+                                    }
+                                />
+                                <Tooltip
+                                    formatter={(value) =>
+                                        formatCurrency(value)
+                                    }
+                                />
+                                <Legend />
+                                <Line
+                                    type="monotone"
+                                    dataKey="income"
+                                    name="Income"
+                                    stroke="#10B981"
+                                    strokeWidth={3}
+                                    activeDot={{ r: 6 }}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="expense"
+                                    name="Expenses"
+                                    stroke="#EF4444"
+                                    strokeWidth={3}
+                                    activeDot={{ r: 6 }}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* CATEGORY CHART AND RECENT TRANSACTIONS */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
 
                     <div className="bg-white p-6 rounded-xl shadow-sm">
@@ -245,7 +416,8 @@ function Dashboard() {
                                             cx="50%"
                                             cy="50%"
                                             outerRadius={100}
-                                            label
+                                            innerRadius={55}
+                                            paddingAngle={3}
                                         >
                                             {categoryData.map((item, index) => (
                                                 <Cell
@@ -254,11 +426,14 @@ function Dashboard() {
                                                 />
                                             ))}
                                         </Pie>
+
                                         <Tooltip
                                             formatter={(value) =>
                                                 formatCurrency(value)
                                             }
                                         />
+
+                                        <Legend />
                                     </PieChart>
                                 </ResponsiveContainer>
                             </div>
@@ -279,25 +454,28 @@ function Dashboard() {
                                 {recentTransactions.map((transaction) => (
                                     <div
                                         key={transaction._id}
-                                        className="flex justify-between items-center border-b pb-3"
+                                        className="flex justify-between items-center border-b pb-3 gap-3"
                                     >
-                                        <div>
-                                            <p className="font-medium">
+                                        <div className="min-w-0">
+                                            <p className="font-medium truncate">
                                                 {transaction.title}
                                             </p>
+
                                             <p className="text-sm text-gray-500">
-                                                {transaction.category} · {' '}
+                                                {transaction.category} ·{' '}
                                                 {new Date(
                                                     transaction.date
                                                 ).toLocaleDateString('en-IN')}
                                             </p>
                                         </div>
 
-                                        <p className={`font-semibold ${
-                                            transaction.type === 'income'
-                                                ? 'text-green-600'
-                                                : 'text-red-600'
-                                        }`}>
+                                        <p
+                                            className={`font-semibold whitespace-nowrap ${
+                                                transaction.type === 'income'
+                                                    ? 'text-green-600'
+                                                    : 'text-red-600'
+                                            }`}
+                                        >
                                             {transaction.type === 'income'
                                                 ? '+'
                                                 : '-'}
